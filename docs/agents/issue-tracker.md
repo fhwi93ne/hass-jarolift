@@ -13,6 +13,21 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 **This repo is a fork** (upstream: `4cc8783b/hass-jarolift`). Inside a fork clone, `gh issue`/`gh pr` default to the upstream repo, so **always pass `--repo fhwi93ne/hass-jarolift`** to every `gh issue`, `gh pr` and `gh label` command (or run `gh repo set-default fhwi93ne/hass-jarolift` once per clone). For `gh api` calls use `repos/fhwi93ne/hass-jarolift/...`. Never file issues on the upstream repo.
 
+## REST fallback (when `gh issue` / `gh pr` fail)
+
+In some environments (e.g. Claude cloud sessions) GitHub GraphQL is blocked, so `gh issue …`, `gh pr …` and `gh label list` fail with `HTTP 403: GitHub GraphQL is not available`. When that happens, use these `gh api` (REST) equivalents instead. `R=repos/fhwi93ne/hass-jarolift`.
+
+- **Create**: `gh api $R/issues -f title="..." -F body=@body.md -f 'labels[]=needs-triage'` (write multi-line bodies to a file first; repeat `-f 'labels[]=...'` per label). Prints the new issue; `--jq .number` for just the number.
+- **Read**: `gh api $R/issues/<n> --jq '{number, title, state, body, labels: [.labels[].name]}'` plus comments via `gh api $R/issues/<n>/comments --jq '[.[] | {user: .user.login, body}]'`
+- **List**: `gh api "$R/issues?state=open&labels=<label>&per_page=100" --jq '[.[] | select(.pull_request | not) | {number, title, body, labels: [.labels[].name]}]'`. The REST endpoint also returns PRs, hence the `select`. Comma-separate multiple labels (AND).
+- **Comment**: `gh api $R/issues/<n>/comments -F body=@comment.md`
+- **Add label**: `gh api $R/issues/<n>/labels -f 'labels[]=<label>'` (creates the label if missing). **Remove label**: `gh api -X DELETE $R/issues/<n>/labels/<label>` (URL-encode `:` as `%3A`).
+- **Create label explicitly**: `gh api $R/labels -f name="<label>" -f color="ededed"`
+- **Close**: comment first, then `gh api -X PATCH $R/issues/<n> -f state=closed -f state_reason=completed` (or `not_planned`).
+- **Assign to self** (wayfinder claim): `gh api $R/issues/<n>/assignees -f 'assignees[]=fhwi93ne'`
+- **Sub-issue** (wayfinder child): `gh api $R/issues/<map>/sub_issues -F sub_issue_id=<child-db-id>`, where the db id is `gh api $R/issues/<child> --jq .id`.
+- **PR read / diff**: `gh api $R/pulls/<n>` and `gh api $R/pulls/<n> -H "Accept: application/vnd.github.diff"`; list via `gh api "$R/pulls?state=open"`.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
